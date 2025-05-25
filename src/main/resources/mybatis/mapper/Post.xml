@@ -1,0 +1,114 @@
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.boardv2.mapper.PostMapper">
+
+    <select id="findByCondition">
+        SELECT
+        p.id,
+        c.name AS categoryName,
+        EXISTS (
+        SELECT 1 FROM post_file pf WHERE pf.post_id = p.id
+        ) AS hasFile,
+        p.subject,
+        p.writer,
+        p.views,
+        p.create_at AS createAt,
+        p.update_at AS updateAt
+        FROM post p
+        JOIN category c ON p.category_id = c.id
+        WHERE p.board_id = #{boardId}
+
+        <if test="categoryName != null and categoryName != ''">
+            AND c.name = #{categoryName}
+        </if>
+
+        <if test="startDate != null">
+            AND Date(p.create_at) &gt;= #{startDate}
+        </if>
+
+        <if test="endDate != null">
+            AND Date(p.create_at) &lt;= #{endDate}
+        </if>
+
+        <if test="keyword != null and keyword != ''">
+            AND (
+            p.subject LIKE CONCAT('%', #{keyword}, '%')
+            OR p.content LIKE CONCAT('%', #{keyword}, '%')
+            OR p.writer LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+
+        ORDER BY p.create_at DESC, id desc
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countByCondition" resultType="Long">
+        SELECT COUNT(*)
+        FROM post p
+        JOIN category c ON p.category_id = c.id
+        WHERE p.board_id = #{boardId}
+
+        <if test="categoryName != null and categoryName != ''">
+            AND c.name = #{categoryName}
+        </if>
+
+        <if test="startDate != null">
+            AND Date(p.create_at) &gt;= #{startDate}
+        </if>
+
+        <if test="endDate != null">
+            AND Date(p.create_at) &lt;= #{endDate}
+        </if>
+
+        <if test="keyword != null and keyword != ''">
+            AND (
+            p.subject LIKE CONCAT('%', #{keyword}, '%')
+            OR p.content LIKE CONCAT('%', #{keyword}, '%')
+            OR p.writer LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+    </select>
+
+    <select id="findById" parameterType="Long">
+        SELECT *
+        FROM post
+        WHERE id = #{postId}
+    </select>
+
+    <insert id="insert" parameterType="Post" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO post(board_id, category_id, subject, content, writer, password, views, create_at, update_at, deleted)
+        VALUES (#{boardId}, #{categoryId}, #{subject}, #{content}, #{writer},
+                #{password}, #{views}, #{createAt}, #{updateAt}, #{deleted})
+    </insert>
+
+    <update id="update" parameterType="Post">
+        UPDATE post
+        SET
+        writer = #{writer},
+        subject = #{subject},
+        content = #{content},
+        update_at = #{updateAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="softDelete">
+        UPDATE post
+        SET subject = '[삭제된 게시글입니다.]',
+            content = '삭제된 게시글입니다.',
+            deleted = true,
+            update_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM post
+        WHERE id = #{id}
+    </delete>
+
+    <update id="increaseViewCount" parameterType="Long">
+        UPDATE post
+        SET views = views + 1
+        WHERE id = #{id}
+    </update>
+</mapper>
+

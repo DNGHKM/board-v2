@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/layout}">
+<head>
+    <meta charset="UTF-8">
+    <title>게시글 수정</title>
+</head>
+<main layout:fragment="content">
+    <div class="container mt-5">
+        <h2 class="mb-4">게시판 - 수정</h2>
+
+        <form id="modifyForm" enctype="multipart/form-data">
+            <input type="hidden" name="boardEngName" id="boardEngName">
+            <table class="table table-bordered table-sm align-middle">
+                <tbody>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold w-20">카테고리</th>
+                    <td id="categoryName"></td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">등록일시</th>
+                    <td><span id="createAt" class="dateTime"></span></td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">수정일시</th>
+                    <td><span id="updateAt" class="dateTime"></span></td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">조회수</th>
+                    <td><span id="views" class="views"></span></td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">작성자 <span class="text-danger">*</span></th>
+                    <td>
+                        <input type="text" name="writer" id="writer" class="form-control w-100">
+                    </td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">비밀번호 <span class="text-danger">*</span></th>
+                    <td>
+                        <input type="password" name="password" id="password" class="form-control w-100">
+                    </td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">제목 <span class="text-danger">*</span></th>
+                    <td>
+                        <input type="text" name="subject" id="subject" class="form-control w-100">
+                    </td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">내용 <span class="text-danger">*</span></th>
+                    <td>
+                        <textarea name="content" id="content" rows="8" class="form-control w-100"></textarea>
+                    </td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">첨부파일</th>
+                    <td>
+                        <ul id="fileList" class="list-unstyled mb-0"></ul>
+                    </td>
+                </tr>
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">파일 첨부</th>
+                    <td>
+                        <input type="file" name="files" id="files" class="form-control w-100" multiple>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div class="d-flex justify-content-end mt-3">
+                <button type="button" class="btn btn-secondary me-2" id="cancelBtn">취소</button>
+                <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+        </form>
+    </div>
+    <script>
+        const postId = pathParts[pathParts.length - 1];
+
+        loadPost(); // 초기 데이터 불러오기
+
+        // 폼 submit 이벤트 → 비동기 전송
+        $('#modifyForm').submit((e) => {
+            e.preventDefault();
+            if (validatePostForm()) {
+                submitForm();
+            }
+        });
+
+        $('#cancelBtn').click(() => {
+            window.location.href = withQueryString(`/boards/${boardEngName}/view/${postId}`);
+        });
+
+        function submitForm() {
+            const formData = new FormData($('#modifyForm')[0]);
+
+            axios.patch(`/api/v1/posts/${postId}`, formData)
+                .then(res => {
+                    alert("수정이 완료되었습니다.");
+                    window.location.href = withQueryString(`/boards/${boardEngName}/view/${postId}`);
+                })
+                .catch(err => {
+                    if (err.response && err.response.status === 400 && err.response.data.errors) {
+                        const messages = err.response.data.errors
+                            .map(e => `- ${e.message}`)
+                            .join('\n');
+                        alert("입력값 오류:\n" + messages);
+                    } else {
+                        alert("알 수 없는 오류로 수정에 실패했습니다.");
+                    }
+                });
+        }
+
+        // 프론트 유효성 검사
+        function validatePostForm() {
+            const writer = $("#writer").val().trim();
+            const password = $("#password").val();
+            const subject = $("#subject").val().trim();
+            const content = $("#content").val().trim();
+            const files = $("#files")[0].files;
+
+            const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*()\-_=+{}\[\]:;"'<>,.?/]).{4,16}$/;
+            const MAX_FILE_SIZE = 10 * 1024 * 1024;
+            const MAX_TOTAL_SIZE = 50 * 1024 * 1024;
+
+            if (!writer || writer.length < 3 || writer.length >= 5) return alert("작성자는 3자 이상 5자 미만이어야 합니다.");
+            if (!password || !PASSWORD_REGEX.test(password)) return alert("비밀번호는 4~16자, 영문/숫자/특수문자를 포함해야 합니다.");
+            if (!subject || subject.length < 4 || subject.length >= 100) return alert("제목은 4자 이상 100자 미만이어야 합니다.");
+            if (!content || content.length < 4 || content.length >= 2000) return alert("내용은 4자 이상 2000자 미만이어야 합니다.");
+
+            let totalSize = 0;
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].size > MAX_FILE_SIZE) return alert(`"${files[i].name}"은 10MB를 초과할 수 없습니다.`);
+                totalSize += files[i].size;
+            }
+            if (totalSize > MAX_TOTAL_SIZE) return alert("전체 업로드 용량은 50MB를 초과할 수 없습니다.");
+
+            return true;
+        }
+
+        function loadPost() {
+            axios.get(`/api/v1/posts/${postId}`)
+                .then(res => {
+                    const data = res.data.data;
+                    if (data.deleted) {
+                        alert("삭제된 게시글은 수정할 수 없습니다.");
+                        window.location.href = withQueryString(`/boards/${boardEngName}/view/${postId}`);
+                    }
+
+                    $("#boardEngName").val(data.boardEngName);
+                    $("#writer").val(data.writer);
+                    $("#subject").val(data.subject);
+                    $("#content").val(data.content);
+                    $("#categoryName").text(data.categoryName);
+                    $("#createAt").text(formatDateTime(data.createAt));
+                    $("#updateAt").text(data.updateAt ? formatDateTime(data.updateAt) : '-');
+                    $("#views").text(formatNumberWithComma(data.views));
+
+                    const $fileList = $("#fileList");
+                    $fileList.empty();
+                    data.files.forEach(file => {
+                        const $li = $(`
+                        <li class="d-flex justify-content-between align-items-center border rounded px-3 py-2 mb-1">
+                            <div>📎 <a href="/file/post/download?filename=${file.savedFilename}">${file.originalFilename}</a></div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteFile('${file.savedFilename}', this)">X</button>
+                            <input type="hidden" name="preserveFilenames" value="${file.savedFilename}">
+                        </li>
+                    `);
+                        $fileList.append($li);
+                    });
+                })
+                .catch(() => {
+                    alert("게시글 정보를 불러오지 못했습니다.");
+                    window.location.href = withQueryString(`/boards/${boardEngName}/list`);
+                });
+        }
+
+        function deleteFile(filename, btn) {
+            $(btn).closest("li").remove();
+        }
+    </script>
+</main>
+</html>

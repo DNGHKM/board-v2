@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/layout}">
+<head>
+    <meta charset="UTF-8">
+    <title>게시글 보기</title>
+</head>
+<main layout:fragment="content">
+    <div class="container mt-5">
+        <div class="row">
+            <h2 class="mb-4">게시판 - 보기</h2>
+
+            <!-- 게시글 정보 -->
+            <div class="border p-3 mb-3" id="post-container">
+                <div class="d-flex justify-content-between small text-muted">
+                    <div id="writer"></div>
+                    <div>
+                        등록일시: <span id="createAt"></span> |
+                        수정일시: <span id="updateAt"></span>
+                    </div>
+                    <div>
+                        조회수: <span id="views"></span>
+                    </div>
+                </div>
+
+                <h5 class="mt-3">
+                    [<span id="categoryName"></span>] <span id="subject"></span>
+                </h5>
+
+                <div class="post-content border mt-3 p-3 bg-light" id="content"></div>
+
+                <div class="mt-4">
+                    <h6>첨부파일</h6>
+                    <ul class="list-unstyled mb-0" id="fileList"></ul>
+                </div>
+            </div>
+
+            <!-- 댓글 -->
+            <div class="mb-3">
+                <h6>댓글</h6>
+                <div id="comment-container"></div>
+
+                <form id="comment-form" class="d-flex mt-3">
+                    <input type="hidden" id="postId"/>
+                    <textarea id="comment-content" class="form-control me-2" rows="5"
+                              placeholder="댓글을 입력해 주세요."></textarea>
+                    <button type="submit" class="btn btn-primary" style="width: 80px;">등록</button>
+                </form>
+            </div>
+
+            <div class="text-end">
+                <button type="button" class="btn btn-secondary me-2" id="listBtn"
+                        onclick="window.location.href= listWithQueryString()">목록
+                </button>
+                <button class="btn btn-warning" id="modify-button">수정</button>
+                <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">삭제</button>
+            </div>
+        </div>
+
+        <!-- 비밀번호 입력 모달 -->
+        <div id="deleteModal" class="modal" tabindex="-1">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <form id="delete-form">
+                        <div class="modal-header">
+                            <h5 class="modal-title">비밀번호 확인</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="password" id="delete-password" class="form-control" required
+                                   placeholder="비밀번호 입력">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                            <button type="submit" class="btn btn-danger">확인</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const postId = pathParts[pathParts.length - 1]; // ex: "2"
+
+        $('#postId').val(postId);
+
+        // 게시글 조회
+        function loadPost() {
+            axios.get(`/api/v1/posts/${postId}`)
+                .then(res => {
+                    const data = res.data.data;
+                    $('#writer').text(data.writer);
+                    $('#createAt').text(formatDateTime(data.createAt));
+
+                    $('#updateAt').text(data.updateAt ? formatDateTime(data.updateAt) : '-');
+                    $('#views').text(formatNumberWithComma(data.views));
+                    $('#categoryName').text(data.categoryName);
+                    $('#subject').text(data.subject);
+                    $('#content').html(data.content);
+
+                    $('#fileList').empty();
+                    data.files.forEach(file => {
+                        const li = $(`
+                        <li>
+                            <a href="/api/v1/files/${file.savedFilename}">
+                                📋 ${file.originalFilename}
+                            </a>
+                        </li>
+                    `);
+                        $('#fileList').append(li);
+                    })
+
+                    renderComments(data.comments);
+                })
+                .catch(err => {
+                    alert("존재하지 않는 게시글입니다.");
+                    window.location.href = `/boards/${boardEngName}/list`;
+                });
+        }
+
+        function renderComments(comments) {
+            const container = $('#comment-container');
+            container.empty();
+
+            comments.forEach(comment => {
+                const commentBox = $(`
+                <div class="border p-2 mb-2 bg-white">
+                    <div class="d-flex justify-content-between small text-muted">
+                        <span>${formatDateTime(comment.createAt)}</span>
+                        <form onsubmit="return deleteComment(${comment.id})">
+                            <button class="btn btn-sm btn-outline-danger ms-3" type="submit">삭제</button>
+                        </form>
+                    </div>
+                    <div class="mt-2 d-flex justify-content-between">
+                        <div>${comment.content}</div>
+                    </div>
+                </div>
+            `);
+                container.append(commentBox);
+            });
+        }
+
+        // 댓글 등록
+        $('#comment-form').on('submit', function (e) {
+            e.preventDefault();
+            const content = $('#comment-content').val().trim();
+            if (!content) return alert("댓글을 입력해 주세요.");
+
+            axios.post(`/api/v1/comments/${postId}`, {
+                content
+            }).then(() => {
+                $('#comment-content').val('');
+                loadPost();
+            }).catch(() => {
+                alert("댓글 등록 실패");
+            })
+        });
+
+        // 댓글 삭제
+        function deleteComment(commentId) {
+            axios.delete(`/api/v1/comments/${commentId}`, {
+                data: {postId}
+            }).then(() => loadPost());
+            return false;
+        }
+
+        // 삭제 요청
+        $('#delete-form').on('submit', function (e) {
+            e.preventDefault();
+            const password = $('#delete-password').val().trim();
+            if (!password) return alert("비밀번호를 입력해 주세요.");
+
+            axios.delete(`/api/v1/posts/${postId}`, {
+                data: {password}
+            }).then(() => {
+                alert("삭제되었습니다.");
+                window.location.href = withQueryString(`/boards/${boardEngName}/list`);
+            }).catch(err => {
+                alert("비밀번호가 일치하지 않거나 삭제 실패");
+            });
+        });
+
+        // 수정 이동
+        $('#modify-button').on('click', function () {
+            location.href = withQueryString(`/boards/${boardEngName}/modify/${postId}`);
+        });
+
+        loadPost();
+
+        // 3초 후 조회수 증가
+        setTimeout(() => {
+            axios.post(`/api/v1/posts/${postId}/viewCount`)
+                .catch(err => {
+                    console.warn("조회수 증가 실패", err);
+                });
+        }, 3000);
+    </script>
+</main>
+</html>

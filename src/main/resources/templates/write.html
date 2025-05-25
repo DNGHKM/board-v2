@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/layout}">
+<head>
+    <meta charset="UTF-8">
+    <title>게시글 작성</title>
+</head>
+
+<main layout:fragment="content">
+    <div class="container mt-5">
+        <h2 class="mb-4">게시판 - 등록</h2>
+        <form id="writeForm" enctype="multipart/form-data">
+            <table class="table table-bordered table-sm align-middle">
+                <tbody>
+                <!-- 카테고리 -->
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold w-20">카테고리 <span class="text-danger">*</span></th>
+                    <td>
+                        <select name="categoryId" id="categoryId" class="form-select w-100">
+                            <option value="">카테고리 선택</option>
+                        </select>
+                    </td>
+                </tr>
+
+                <!-- 작성자 -->
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">작성자 <span class="text-danger">*</span></th>
+                    <td>
+                        <input type="text" name="writer" id="writer" class="form-control w-100">
+                    </td>
+                </tr>
+
+                <!-- 비밀번호 -->
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">비밀번호 <span class="text-danger">*</span></th>
+                    <td>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <input type="password" name="password" id="password" class="form-control"
+                                       placeholder="비밀번호">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="password" name="passwordCheck" id="passwordCheck" class="form-control"
+                                       placeholder="비밀번호 확인">
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- 제목 -->
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">제목 <span class="text-danger">*</span></th>
+                    <td>
+                        <input type="text" name="subject" id="subject" class="form-control w-100">
+                    </td>
+                </tr>
+
+                <!-- 내용 -->
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">내용 <span class="text-danger">*</span></th>
+                    <td>
+                        <textarea name="content" id="content" rows="8" class="form-control w-100"></textarea>
+                    </td>
+                </tr>
+
+                <!-- 파일 -->
+                <tr>
+                    <th class="ps-3 bg-light fw-semibold">파일 첨부</th>
+                    <td>
+                        <input type="file" name="files" id="files" class="form-control w-100" multiple>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+
+            <!-- 버튼 -->
+            <div class="d-flex justify-content-end mt-3">
+                <button type="button" class="btn btn-secondary me-2" id="cancelBtn" onclick="window.location.href = listWithQueryString()">취소</button>
+                <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+        </form>
+    </div>
+    <script>
+        $("#writeForm").on("submit", function (e) {
+            e.preventDefault();
+            // const error = validateForm();
+            // if (error) {
+            //     alert(error);
+            //     return;
+            // }
+            submitPostForm();
+        });
+
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+        const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
+
+        const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*()\-_=+{}\[\]:;"'<>,.?/]).{4,16}$/;
+
+        function validateForm() {
+            const writer = $("#writer").val().trim();
+            const password = $("#password").val();
+            const passwordCheck = $("#passwordCheck").val();
+            const subject = $("#subject").val().trim();
+            const content = $("#content").val().trim();
+            const category = $("#categoryId").val();
+            const files = $("#files")[0].files;
+
+            if (!category) return "카테고리를 선택하세요.";
+            if (!writer) return "작성자를 입력하세요(3~5자)";
+            if (writer.length < 3 || writer.length >= 5) return "작성자는 3자 이상 5자 미만이어야 합니다.";
+            if (!password) return "비밀번호를 입력하세요.";
+            if (!PASSWORD_REGEX.test(password)) return "비밀번호는 4~16자, 영문/숫자/특수문자를 포함해야 합니다.";
+            if (password !== passwordCheck) return "비밀번호가 일치하지 않습니다.";
+            if (!subject) return "제목을 입력하세요.";
+            if (subject.length < 4 || subject.length >= 100) return "제목은 4자 이상 100자 미만이어야 합니다.";
+            if (!content) return "내용을 입력하세요.";
+            if (content.length < 4 || content.length >= 2000) return "내용은 4자 이상 2000자 미만이어야 합니다.";
+
+            let totalSize = 0;
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].size > MAX_FILE_SIZE) {
+                    return `파일 "${files[i].name}"은 10MB를 초과할 수 없습니다.`;
+                }
+                totalSize += files[i].size;
+            }
+
+            if (totalSize > MAX_TOTAL_SIZE) return "전체 업로드 용량은 50MB를 초과할 수 없습니다.";
+            return null;
+        }
+
+        function submitPostForm() {
+            const form = $("#writeForm")[0];
+            const formData = new FormData(form);
+            formData.append("boardEngName", boardEngName);
+
+            axios.post(`/api/v1/posts`, formData, {
+                headers: {'Content-Type': 'multipart/form-data'}
+            }).then(res => {
+                const data = res.data.data;
+                alert("게시글이 등록되었습니다.");
+                window.location.href = withQueryString(`/boards/${data.boardEngName}/view/${data.postId}`);
+            }).catch(err => {
+                const msg = err?.response?.data?.message || "요청 처리 중 오류가 발생했습니다.";
+                alert("오류: " + msg);
+                console.error(err);
+            });
+        }
+
+
+        // 카테고리 비동기 로드
+        function loadCategories(selectedCategoryId) {
+            axios.get('/api/v1/categories', {
+                params: { boardEngName }
+            }).then(res => {
+                const $select = $('#categoryId');
+                $select.empty().append(`<option value="">카테고리 선택</option>`);
+
+                res.data.data.forEach(c => {
+                    const selected = c.id === Number(selectedCategoryId) ? 'selected' : '';
+                    $select.append(`<option value="${c.id}" ${selected}>${c.name}</option>`);
+                });
+            }).catch(() => {
+                alert("카테고리 정보를 불러오는 데 실패했습니다.");
+            });
+        }
+
+
+        // 초기 진입 시 실행
+        $(document).ready(() => {
+            const searchParams = getSearchParams();
+            loadCategories(searchParams.categoryName);
+        });
+    </script>
+</main>
+</html>

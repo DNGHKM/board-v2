@@ -1,0 +1,15 @@
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.boardv2.mapper.BoardMapper">
+    <select id="findById" parameterType="Long">
+        SELECT *
+        FROM board
+        WHERE id = #{boardId};
+    </select>
+    <select id="findByEngName" parameterType="String">
+        SELECT *
+        FROM board
+        WHERE eng_name = #{boardEngName};
+    </select>
+</mapper>
+

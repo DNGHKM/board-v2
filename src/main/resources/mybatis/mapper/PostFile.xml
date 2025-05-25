@@ -1,0 +1,30 @@
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.boardv2.mapper.PostFileMapper">
+    <insert id="insertFiles" parameterType="PostFile">
+        INSERT INTO post_file(post_id, original_filename, saved_filename, path)
+        VALUES
+        <foreach collection="postFiles" item="postFile" separator=",">
+            (#{postFile.postId}, #{postFile.originalFilename}, #{postFile.savedFilename}, #{postFile.path})
+        </foreach>
+    </insert>
+
+    <select id="findByPostId" parameterType="Long">
+        SELECT *
+        FROM post_file
+        WHERE post_id = #{postId}
+    </select>
+
+    <select id="findBySavedFilename" parameterType="String">
+        SELECT *
+        FROM post_file
+        WHERE saved_filename = #{savedFilename};
+    </select>
+
+    <delete id="deleteById" parameterType="Long">
+        DELETE
+        FROM post_file
+        WHERE id = #{id}
+    </delete>
+</mapper>
+

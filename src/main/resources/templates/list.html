@@ -1,0 +1,252 @@
+<html lang="ko"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/layout}">
+<head>
+    <meta charset="UTF-8">
+    <title>게시글 목록</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+</head>
+<main layout:fragment="content">
+    <div class="container mt-5">
+        <h2 class="mb-4">게시판 - 목록</h2>
+
+        <!-- 검색 영역 -->
+        <form id="searchForm" method="get"
+              class="row gx-3 align-items-center mb-4 border rounded p-3">
+
+            <div class="col-auto">
+                <label for="startDate" class="col-form-label">등록일:</label>
+            </div>
+            <div class="col-auto">
+                <input type="date" id="startDate" name="startDate" class="form-control"/>
+            </div>
+            <div class="col-auto">~</div>
+            <div class="col-auto">
+                <input type="date" id="endDate" name="endDate" class="form-control"/>
+            </div>
+
+            <div class="col-md-2">
+                <select id="category" name="categoryName" class="form-select w-100">
+                    <option value="">전체 카테고리</option>
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <input type="text" id="keyword" name="keyword"
+                       placeholder="검색어를 입력해 주세요. (제목 + 작성자 + 내용)"
+                       class="form-control"/>
+            </div>
+
+            <div class="col-auto d-flex gap-2">
+                <button type="submit" class="btn btn-primary">검색</button>
+                <a href="#" id="resetBtn" class="btn btn-secondary">초기화</a>
+            </div>
+        </form>
+
+        <div class="mb-2">
+            총 <strong><span id="postCount">0</span></strong>건
+        </div>
+
+        <!-- 게시글 목록 출력 -->
+        <table class="table table-bordered table-hover text-center">
+            <thead class="table-light">
+            <tr>
+                <th>카테고리</th>
+                <th>첨부</th>
+                <th>제목</th>
+                <th>작성자</th>
+                <th>조회수</th>
+                <th>등록 일시</th>
+                <th>수정 일시</th>
+            </tr>
+            </thead>
+            <tbody id="post-list"></tbody>
+        </table>
+
+        <!-- 페이징 영역 -->
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center" id="pagination"></ul>
+        </nav>
+
+        <!-- 등록 버튼 -->
+        <div class="text-end">
+            <button class="btn btn-lg btn-success" id="writeBtn">
+                등록
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 검색 폼 값 초기화
+        function setFormValues(params) {
+            $('#category').val(params.categoryName);
+            $('#keyword').val(params.keyword);
+            $('#startDate').val(params.startDate);
+            $('#endDate').val(params.endDate);
+        }
+
+        // 카테고리 비동기 로드
+        function loadCategories(selectedCategory) {
+            axios.get('/api/v1/categories', {
+                params: {boardEngName}
+            }).then(res => {
+                const $select = $('#category');
+                $select.empty().append(`<option value="">전체 카테고리</option>`);
+                res.data.data.forEach(c => {
+                    const selected = c.name === selectedCategory ? 'selected' : '';
+                    $select.append(`<option value="${c.name}" ${selected}>${c.name}</option>`);
+                });
+            }).catch(() => {
+                alert("카테고리 정보를 불러오는 데 실패했습니다.");
+            });
+        }
+
+        // 게시글 목록 렌더링
+        function renderPostList(posts, boardEngName) {
+            const $container = $('#post-list');
+            $container.empty();
+
+            if (!posts || posts.length === 0) {
+                $container.html('<tr><td colspan="7">게시글이 없습니다.</td></tr>');
+                return;
+            }
+
+            const rows = posts.map(p => `
+                <tr>
+                    <td>${p.categoryName}</td>
+                    <td>${p.hasFile ? '<img src="/image/clip.png" width="20px"></img>' : '-'}</td>
+                    <td class="text-start">
+                        <a href="${withQueryString(`/boards/${boardEngName}/view/${p.id}`)}">${p.subject}</a>
+                    </td>
+                    <td>${p.writer}</td>
+                    <td>${formatNumberWithComma(p.views)}</td>
+                    <td>${formatDateTime(p.createAt)}</td>
+                    <td>${p.updateAt ? formatDateTime(p.updateAt) : '-'}</td>
+                </tr>
+            `).join('');
+            $container.html(rows);
+        }
+
+        // 페이징 렌더링
+        function renderPagination(currentPage, totalPages) {
+            const $pagination = $('#pagination');
+            $pagination.empty();
+
+            const baseParams = getSearchParams();
+            const params = new URLSearchParams(baseParams);
+
+            const groupSize = 10;
+            const start = Math.floor((currentPage - 1) / groupSize) * groupSize + 1;
+            const end = Math.min(start + groupSize - 1, totalPages);
+
+            const makePageLink = (page, label = null, extraClass = '') => {
+                params.set("page", page);
+                return `
+            <li class="page-item ${extraClass}">
+                <a class="page-link" href="?${params.toString()}">${label || page}</a>
+            </li>
+        `;
+            };
+
+            // « 처음
+            if (currentPage > 1) {
+                $pagination.append(makePageLink(1, '«'));
+            }
+
+            // < 이전 그룹 (0으로 끝나는 페이지)
+            if (start > 1) {
+                $pagination.append(makePageLink(start - 1, '<'));
+            }
+
+            // 현재 그룹 페이지 목록
+            for (let i = start; i <= end; i++) {
+                const activeClass = (i === currentPage) ? 'active' : '';
+                $pagination.append(makePageLink(i, null, activeClass));
+            }
+
+            // > 다음 그룹 (1로 끝나는 페이지 또는 마지막)
+            if (end < totalPages) {
+                const nextPage = end + 1;
+                $pagination.append(makePageLink(nextPage, '>'));
+            }
+
+            // » 마지막
+            if (currentPage < totalPages) {
+                $pagination.append(makePageLink(totalPages, '»'));
+            }
+        }
+
+        // 게시글 목록 요청
+        function fetchAndRenderPosts(params) {
+            axios.get('/api/v1/posts', {params})
+                .then(res => {
+                    const posts = res.data.data.posts;
+                    const postCount = res.data.data.postCount;
+                    const pageInfo = res.data.data;
+
+                    $('#postCount').text(postCount);
+                    renderPostList(posts, boardEngName);
+                    renderPagination(pageInfo.page, pageInfo.totalPages);
+                }).catch(() => {
+                alert("게시글 목록을 불러오는 데 실패했습니다.");
+            });
+        }
+
+        // 초기화 버튼
+        $('#resetBtn').on('click', function (e) {
+            e.preventDefault();
+            location.href = `/boards/${boardEngName}/list`;
+        });
+
+        // 등록 버튼
+        $('#writeBtn').on('click', () => {
+            location.href = withQueryString(`/boards/${boardEngName}/write`);
+        });
+
+        // 검색 폼 제출 → URL 변경 + fetch
+        $('#searchForm').on('submit', function (e) {
+            e.preventDefault();
+
+            const start = $('#startDate').val();
+            const end = $('#endDate').val();
+
+            // 날짜 유효성 검사
+            if (!start || !end) {
+                alert("시작일과 종료일을 모두 입력해 주세요.");
+                return;
+            }
+
+            if (start && end && new Date(start) > new Date(end)) {
+                alert("시작일은 종료일보다 이전이어야 합니다.");
+                return;
+            }
+
+            const newParams = new URLSearchParams();
+            newParams.set("page", 1);
+            newParams.set("size", 10);
+            newParams.set("boardEngName", boardEngName);
+
+            if (start) newParams.set("startDate", start);
+            if (end) newParams.set("endDate", end);
+            if ($('#category').val()) newParams.set("categoryName", $('#category').val());
+            if ($('#keyword').val()) newParams.set("keyword", $('#keyword').val());
+
+            const query = `?${newParams.toString()}`;
+            window.history.pushState({}, '', query);
+
+            const queryObj = Object.fromEntries(newParams.entries());
+            fetchAndRenderPosts(queryObj);
+        });
+
+
+        // 초기 진입 시 실행
+        $(document).ready(() => {
+            const searchParams = getSearchParams();
+            setFormValues(searchParams);
+            loadCategories(searchParams.categoryName);
+            fetchAndRenderPosts(searchParams);
+        });
+    </script>
+</main>
+</html>
